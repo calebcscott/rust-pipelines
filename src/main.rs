@@ -47,6 +47,7 @@ impl<T: Task> Pipeline<T> {
 
     fn run_task(tasks: &[T], msgs: Vec<HashMap<String, String>>) -> Result<Vec<HashMap<String,String>>, Box<dyn Error>> {
         if tasks.len() <= 0 {
+            println!("End of chain reached unrolling with messages");
             return Ok( msgs )
         }
         match tasks[0].run(&msgs) {
@@ -107,7 +108,7 @@ fn simple_error(_msg: &[HashMap<String, String>]) -> Result< Vec<HashMap<String,
 
 
 fn main() {
-    let tasks = vec![BasicTask::new("hello world".to_string(), Box::new(simple_task)), BasicTask::new("kiss my ass".to_string(), Box::new(simple_error))];
+    let tasks = vec![BasicTask::new("hello world".to_string(), Box::new(simple_task))]; //, BasicTask::new("kiss my ass".to_string(), Box::new(simple_error))];
     let pipe = Pipeline::new(tasks);
 
     let _ = pipe.start();
