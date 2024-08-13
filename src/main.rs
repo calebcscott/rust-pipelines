@@ -50,9 +50,22 @@ impl<T: Task> Pipeline<T> {
             println!("End of chain reached unrolling with messages");
             return Ok( msgs )
         }
+
+        // Stop recursion on error, but include error output as part of message chain,
+        // this should indicate that pipeline failed and what the output was
         match tasks[0].run(&msgs) {
             Ok(m) => Pipeline::run_task(&tasks[1..], m),
-            Err(e) => panic!("Failed with error {:?}", e),
+            Err(e) => {
+                let mut v = Vec::new();
+                let mut map = HashMap::new();
+
+                map.insert("output".to_string(), e.to_string());
+
+                v.extend_from_slice(&msgs);
+                v.push(map);
+
+                Ok(v)
+            }
         }
     }
 
@@ -102,14 +115,43 @@ fn simple_task(msg: &[HashMap<String, String>]) -> Result< Vec<HashMap<String,St
 }
 
 
+#[allow(dead_code)]
 fn simple_error(_msg: &[HashMap<String, String>]) -> Result< Vec<HashMap<String,String>>, Box<dyn Error>> {
     Err(Box::new(MyError::new("uknown")))
 }
 
 
 fn main() {
-    let tasks = vec![BasicTask::new("hello world".to_string(), Box::new(simple_task))]; //, BasicTask::new("kiss my ass".to_string(), Box::new(simple_error))];
+    // Second task will fail with error
+    // third task should not run
+    // pipeline should catch error and push error into message chain
+    let tasks = vec![
+        BasicTask::new("hello world".to_string(), Box::new(simple_task)), 
+        BasicTask::new("kiss my ass".to_string(), Box::new(simple_error)),
+        BasicTask::new("hello world".to_string(), Box::new(simple_task)),
+    ];
     let pipe = Pipeline::new(tasks);
 
-    let _ = pipe.start();
+
+    match pipe.start() {
+        Ok(results) => {
+            let captured_output : Vec<_> = results.into_iter()
+                                         .map(|result| {
+                                              result.into_iter().filter_map(|(k,v)| {
+                                                  if k.starts_with("output") {
+                                                      Some(v.to_owned())
+                                                  }
+                                                  else {
+                                                      None
+                                                  }
+                                              }).collect::<Vec<String>>()
+                                                .join(" ")                        
+                                         }).collect();
+
+            println!("Output: {:?}", captured_output);
+        },
+        Err(e) => {
+            panic!("Recieved error from some task, {:?}", e)
+        }
+    }
 }
